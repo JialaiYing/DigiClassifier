@@ -8,17 +8,21 @@ from tqdm import tqdm
 
 def get_data_loaders(batch_size=64):
     trainset = torchvision.datasets.MNIST(root='./data', train=True,
-                                           download=True, transform=transforms.ToTensor())
+                                         download=True, transform=transforms.ToTensor())
     testset = torchvision.datasets.MNIST(root='./data', train=False,
-                                          download=True, transform=transforms.ToTensor())
+                                        download=True, transform=transforms.ToTensor())
 
     train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
 
-def train_model(model, train_loader, device, epochs=5):
+# Added optimizer parameter with a fallback default
+def train_model(model, train_loader, device, epochs=5, optimizer=None):
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    
+    # If no custom optimizer is passed, build the default one
+    if optimizer is None:
+        optimizer = optim.Adam(model.parameters(), lr=0.01)
     
     print(f"Training on device: {device}")
     for epoch in range(epochs):
@@ -38,16 +42,25 @@ def train_model(model, train_loader, device, epochs=5):
             
             running_loss += loss.item()
             progress_bar.set_postfix(loss=running_loss/len(train_loader))
+            
+    # Return the final average training loss for this epoch step
+    return running_loss / len(train_loader)
 
 def evaluate_model(model, test_loader, device):
     model.eval()
+    criterion = nn.CrossEntropyLoss() # Added to track historical evaluation loss
     correct = 0
     total = 0
+    total_loss = 0.0
 
     with torch.no_grad():
         for images, labels in test_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
+            
+            # Compute loss value for evaluation tracking
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
             
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -55,3 +68,6 @@ def evaluate_model(model, test_loader, device):
 
     accuracy = 100 * correct / total
     print(f"\nAccuracy: {accuracy:.2f}%")
+    
+    # Return the average testing loss value
+    return total_loss / len(test_loader)
